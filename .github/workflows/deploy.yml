@@ -143,6 +143,8 @@ jobs:
             "mkdir -p '$DEPLOY_PATH/docker/keycloak'"
           scp -P "${DEPLOY_PORT:-22}" docker-compose.deploy.yml \
             "$DEPLOY_USER@$DEPLOY_HOST:$DEPLOY_PATH/docker-compose.deploy.yml"
+          scp -P "${DEPLOY_PORT:-22}" docker/Caddyfile \
+            "$DEPLOY_USER@$DEPLOY_HOST:$DEPLOY_PATH/docker/Caddyfile"
           scp -P "${DEPLOY_PORT:-22}" docker/keycloak/realm-export.json \
             "$DEPLOY_USER@$DEPLOY_HOST:$DEPLOY_PATH/docker/keycloak/realm-export.json"
 

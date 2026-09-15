@@ -39,6 +39,13 @@ sudo chown -R DEPLOY_USER:DEPLOY_USER /opt/lct-crm
 sudo usermod -aG docker DEPLOY_USER
 ```
 
+Деплой также поднимает Caddy как reverse proxy. Caddy автоматически получает и
+обновляет сертификаты Let's Encrypt для `DOMAIN` (API) и `KEYCLOAK_DOMAIN`
+(Keycloak), а данные ACME сохраняются в Docker volumes. Перед первым деплоем
+создайте DNS-записи обоих доменов на IP сервера и откройте входящие TCP-порты
+`80` и `443` (UDP `443` — опционально для HTTP/3). Заполните эти переменные в
+`.env`; `KEYCLOAK_ISSUER` должен использовать HTTPS-адрес Keycloak.
+
 В настройках репозитория GitHub создайте Environment `test` и добавьте secrets:
 
 | Secret | Значение |
