@@ -90,6 +90,10 @@ app = FastAPI(
     redoc_url="/redoc",
     openapi_url="/openapi.json",
     lifespan=lifespan,
+    # Prefills the client_id field in the /docs "Authorize" dialog so testing
+    # against the local Keycloak (realm "crm", public client "crm-api")
+    # needs only a username/password, not manual token wrangling.
+    swagger_ui_init_oauth={"clientId": "crm-api", "appName": settings.app_name},
 )
 
 
@@ -218,8 +222,17 @@ def custom_openapi() -> dict[str, Any]:
         tags=TAGS_METADATA,
     )
     if settings.auth_mode == "keycloak":
-        scheme: dict[str, Any] = {"type": "http", "scheme": "bearer", "bearerFormat": "JWT"}
-        name = "KeycloakJWT"
+        # Resource-owner password flow: lets /docs "Authorize" log in with a
+        # Keycloak username/password directly, instead of curling the token
+        # endpoint by hand and pasting the JWT in. Same Bearer header on the
+        # wire either way — `_keycloak_user` doesn't know or care how the
+        # token was obtained.
+        token_url = f"{(settings.keycloak_issuer or '').rstrip('/')}/protocol/openid-connect/token"
+        scheme: dict[str, Any] = {
+            "type": "oauth2",
+            "flows": {"password": {"tokenUrl": token_url, "scopes": {}}},
+        }
+        name = "KeycloakOAuth2"
     else:
         scheme = {
             "type": "apiKey",

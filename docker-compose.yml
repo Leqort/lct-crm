@@ -18,6 +18,31 @@ services:
       timeout: 3s
       retries: 20
 
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.0
+    container_name: crm-keycloak
+    command: start-dev --import-realm
+    environment:
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: admin
+      # Fixes the `iss` claim to this value no matter which hostname the
+      # request came in on (the api container reaches Keycloak as
+      # `keycloak:8080`, the browser/Swagger as `localhost:8080` — without
+      # this they'd disagree and token validation would fail on `iss`).
+      KC_HOSTNAME: localhost
+      KC_HOSTNAME_PORT: ${KEYCLOAK_PORT:-8080}
+      KC_HOSTNAME_STRICT_HTTPS: "false"
+      KC_HTTP_ENABLED: "true"
+    ports:
+      - "${KEYCLOAK_PORT:-8080}:8080"
+    volumes:
+      - ./docker/keycloak/realm-export.json:/opt/keycloak/data/import/realm-export.json:ro
+    healthcheck:
+      test: ["CMD-SHELL", "exec 3<>/dev/tcp/localhost/8080 || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 20
+
   api:
     build: .
     container_name: crm-api
@@ -36,7 +61,9 @@ services:
       SEED_ON_START: ${SEED_ON_START:-true}
       KEYCLOAK_ISSUER: ${KEYCLOAK_ISSUER:-}
       KEYCLOAK_AUDIENCE: ${KEYCLOAK_AUDIENCE:-}
-      KEYCLOAK_JWKS_URL: ${KEYCLOAK_JWKS_URL:-}
+      # Inside the compose network the api container talks to Keycloak by
+      # its service name, not by the `localhost` hostname baked into `iss`.
+      KEYCLOAK_JWKS_URL: ${KEYCLOAK_JWKS_URL:-http://keycloak:8080/realms/crm/protocol/openid-connect/certs}
     ports:
       - "${API_PORT:-8000}:8000"
     healthcheck:

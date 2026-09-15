@@ -6,6 +6,7 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from typing import Any
 
+import sqlalchemy as sa
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -39,6 +40,36 @@ async def integrity_guard(
                 "Данные нарушают ограничение целостности", details=payload
             ) from None
         raise DuplicateEntityError(duplicate_message, details=payload) from None
+
+
+async def count_live(session: AsyncSession, model: Any, *conditions: Any) -> int:
+    """Count rows of `model` that match `conditions` and are not soft-deleted."""
+    total = await session.scalar(
+        sa.select(sa.func.count()).select_from(model).where(model.deleted_at.is_(None), *conditions)
+    )
+    return int(total or 0)
+
+
+async def assert_not_referenced(
+    session: AsyncSession, entity_name: str, blockers: dict[str, int]
+) -> None:
+    """Refuse a soft delete while live rows still point at the object.
+
+    Soft-deleting a referenced catalog entry would not remove it from sight: it
+    would keep surfacing as a nested object inside every card that references
+    it, so the "deleted" row would still be visible to users. Blocking mirrors
+    the `ON DELETE RESTRICT` already declared on the foreign keys, loses no data
+    and is reversible — unlike cascading the deletion onward.
+    """
+    blocking = {name: count for name, count in blockers.items() if count}
+    if not blocking:
+        return
+    listed = ", ".join(f"{name}: {count}" for name, count in blocking.items())
+    raise ValidationError(
+        f"Нельзя удалить {entity_name}: на него ссылаются связанные записи ({listed}). "
+        "Сначала удалите или перепривяжите их.",
+        details={"blocked_by": blocking},
+    )
 
 
 def apply_patch(obj: object, data: dict[str, Any]) -> dict[str, Any]:

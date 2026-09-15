@@ -159,3 +159,27 @@ async def test_preset_with_unknown_field_is_rejected(session, client, manager_us
     )
     assert response.status_code == 422
     assert response.json()["error"]["code"] == "VALIDATION_ERROR"
+
+
+async def test_legacy_xls_goes_through_the_whole_cycle(session, client, manager_user):
+    """A real customer file may still be .xls — the full cycle must accept it."""
+    from tests.factories import make_xls
+
+    content = make_xls([catalog_row("Вуз из .xls", product="Старое ПО", contract="ДЛ-XLS")])
+    uploaded = await client.post(
+        "/api/v1/imports",
+        files={"file": ("catalog.xls", content, "application/vnd.ms-excel")},
+        data={"target": "interactions"},
+        headers=auth(manager_user),
+    )
+    assert uploaded.status_code == 201
+    job_id = uploaded.json()["job"]["id"]
+
+    validated = await client.post(f"/api/v1/imports/{job_id}/validate", headers=auth(manager_user))
+    assert validated.json()["stats"]["to_create"] == 1
+
+    committed = await client.post(f"/api/v1/imports/{job_id}/commit", headers=auth(manager_user))
+    assert committed.json()["stats"]["created"] == 1
+
+    interactions = await client.get("/api/v1/interactions", headers=auth(manager_user))
+    assert interactions.json()["items"][0]["contract_number"] == "ДЛ-XLS"

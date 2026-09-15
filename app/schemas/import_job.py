@@ -69,13 +69,6 @@ class MappingRequest(BaseModel):
     )
 
 
-class ImportRowMessage(BaseModel):
-    level: ImportRowStatus
-    field: str | None = None
-    text: str
-    suggestion: dict[str, Any] | None = None
-
-
 class ImportRowRead(ORMModel):
     id: uuid.UUID
     row_number: int
@@ -84,11 +77,6 @@ class ImportRowRead(ORMModel):
     parsed_data: dict[str, Any]
     messages: list[Any]
     resolved_entity_id: uuid.UUID | None
-
-
-class ImportValidateResult(BaseModel):
-    job: ImportJobRead
-    stats: ImportStats
 
 
 class ImportCommitResult(BaseModel):

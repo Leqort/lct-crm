@@ -17,8 +17,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.access import AccessScope
 from app.core.errors import DuplicateEntityError, NotFoundError, ValidationError
-from app.models.product import ITDirection, ITProduct, Vendor
-from app.models.university import University, UniversityContact
+from app.models.interaction import Interaction
+from app.models.product import ITDirection, ITProduct, ITProductDirection, Vendor
+from app.models.university import University, UniversityAssignment, UniversityContact
 from app.repositories.product import (
     ITDirectionRepository,
     ITProductRepository,
@@ -39,7 +40,7 @@ from app.schemas.university import (
     UniversityCreate,
     UniversityUpdate,
 )
-from app.services.base import apply_patch, integrity_guard
+from app.services.base import apply_patch, assert_not_referenced, count_live, integrity_guard
 from app.services.text import clean_text, normalize_name
 
 # Trigram similarity is used only to shortlist candidates for the edit-distance
@@ -110,6 +111,25 @@ class UniversityService:
 
     async def delete(self, university_id: uuid.UUID) -> None:
         university = await self.repo.get_or_fail(university_id)
+        await assert_not_referenced(
+            self.session,
+            "вуз",
+            {
+                "взаимодействия": await count_live(
+                    self.session, Interaction, Interaction.university_id == university_id
+                ),
+                "контактные лица": await count_live(
+                    self.session,
+                    UniversityContact,
+                    UniversityContact.university_id == university_id,
+                ),
+                "назначения ответственных": await count_live(
+                    self.session,
+                    UniversityAssignment,
+                    UniversityAssignment.university_id == university_id,
+                ),
+            },
+        )
         await self.repo.soft_delete(university)
         await self.session.commit()
 
@@ -208,6 +228,15 @@ class VendorService:
 
     async def delete(self, vendor_id: uuid.UUID) -> None:
         vendor = await self.repo.get_or_fail(vendor_id)
+        await assert_not_referenced(
+            self.session,
+            "вендора",
+            {
+                "ИТ-продукты": await count_live(
+                    self.session, ITProduct, ITProduct.vendor_id == vendor_id
+                )
+            },
+        )
         await self.repo.soft_delete(vendor)
         await self.session.commit()
 
@@ -282,6 +311,25 @@ class ITDirectionService:
 
     async def delete(self, direction_id: uuid.UUID) -> None:
         direction = await self.repo.get_or_fail(direction_id)
+        linked_products = await self.session.scalar(
+            sa.select(sa.func.count())
+            .select_from(ITProduct)
+            .join(ITProductDirection, ITProductDirection.it_product_id == ITProduct.id)
+            .where(
+                ITProductDirection.it_direction_id == direction_id,
+                ITProduct.deleted_at.is_(None),
+            )
+        )
+        await assert_not_referenced(
+            self.session,
+            "ИТ-направление",
+            {
+                "взаимодействия": await count_live(
+                    self.session, Interaction, Interaction.it_direction_id == direction_id
+                ),
+                "ИТ-продукты": int(linked_products or 0),
+            },
+        )
         await self.repo.soft_delete(direction)
         await self.session.commit()
 
@@ -391,6 +439,15 @@ class ITProductService:
 
     async def delete(self, product_id: uuid.UUID) -> None:
         product = await self.repo.get_or_fail(product_id)
+        await assert_not_referenced(
+            self.session,
+            "ИТ-продукт",
+            {
+                "взаимодействия": await count_live(
+                    self.session, Interaction, Interaction.it_product_id == product_id
+                )
+            },
+        )
         await self.repo.soft_delete(product)
         await self.session.commit()
 

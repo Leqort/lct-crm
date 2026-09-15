@@ -145,3 +145,29 @@ def test_one_field_cannot_take_two_columns():
             ImportTarget.INTERACTIONS,
             CATALOG_HEADERS,
         )
+
+
+def test_detects_and_parses_legacy_xls():
+    """The .xls branch uses xlrd, a completely separate code path from .xlsx."""
+    from tests.factories import make_xls
+
+    content = make_xls([catalog_row("Вуз из старого файла", contract="ДЛ-XLS")])
+    assert detect_format(content, "catalog.xls") == "xls"
+
+    parsed = parse_file(content, "catalog.xls")
+    assert parsed.file_format == "xls"
+    assert parsed.headers == CATALOG_HEADERS
+    assert len(parsed.rows) == 1
+    assert parsed.rows[0].cells["Название ВУЗа"] == "Вуз из старого файла"
+    assert parsed.rows[0].cells["Номер договора"] == "ДЛ-XLS"
+
+
+def test_xls_dates_are_converted_not_left_as_serials():
+    """xlrd returns dates as floats plus a type flag; the parser must convert them."""
+    from tests.factories import make_xls
+
+    content = make_xls([catalog_row("Вуз", signed=dt.date(2026, 2, 17))])
+    parsed = parse_file(content, "catalog.xls")
+    value = parsed.rows[0].cells["Подписание лицензии"]
+    assert str(value).startswith("2026-02-17")
+    assert parse_date(value, "date")[0] == dt.date(2026, 2, 17)

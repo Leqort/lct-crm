@@ -266,3 +266,66 @@ async def test_api_assignment_create_returns_employee(session, client, manager_u
     )
     assert response.status_code == 201
     assert response.json()["user"]["full_name"] == kam_user.full_name
+
+
+async def test_referenced_university_cannot_be_deleted(session, scope):
+    """Regression: a soft-deleted university kept showing up inside its cards.
+
+    Blocking the delete mirrors the `ON DELETE RESTRICT` on the foreign key and
+    keeps the "deleted means invisible" promise honest.
+    """
+    from app.core.errors import ValidationError as AppValidationError
+    from app.schemas.interaction import InteractionCreate
+    from app.services.interactions import InteractionService
+
+    universities = UniversityService(session, scope)
+    university = await universities.create(UniversityCreate(name="Вуз со связями"))
+    interactions = InteractionService(session, scope)
+    interaction = await interactions.create(InteractionCreate(university_id=university.id))
+
+    with pytest.raises(AppValidationError) as excinfo:
+        await universities.delete(university.id)
+    assert excinfo.value.details["blocked_by"]["взаимодействия"] == 1
+
+    # Once the card is gone, the university can be removed.
+    await interactions.delete(interaction.id)
+    await universities.delete(university.id)
+    _, total = await universities.list()
+    assert total == 0
+
+
+async def test_referenced_vendor_and_product_cannot_be_deleted(session, scope):
+    from app.core.errors import ValidationError as AppValidationError
+    from app.schemas.interaction import InteractionCreate
+    from app.services.interactions import InteractionService
+
+    vendors = VendorService(session, scope)
+    vendor = await vendors.create(VendorCreate(name="Связанный вендор"))
+    products = ITProductService(session, scope)
+    product = await products.create(ProductCreate(name="Связанное ПО", vendor_id=vendor.id))
+
+    with pytest.raises(AppValidationError):
+        await vendors.delete(vendor.id)
+
+    university = await UniversityService(session, scope).create(
+        UniversityCreate(name="Вуз для связи")
+    )
+    await InteractionService(session, scope).create(
+        InteractionCreate(university_id=university.id, it_product_id=product.id)
+    )
+    with pytest.raises(AppValidationError):
+        await products.delete(product.id)
+
+
+async def test_referenced_direction_cannot_be_deleted(session, scope):
+    from app.core.errors import ValidationError as AppValidationError
+
+    directions = ITDirectionService(session, scope)
+    direction = await directions.create(DirectionCreate(name="Связанное направление"))
+    await ITProductService(session, scope).create(
+        ProductCreate(name="ПО направления", direction_ids=[direction.id])
+    )
+
+    with pytest.raises(AppValidationError) as excinfo:
+        await directions.delete(direction.id)
+    assert excinfo.value.details["blocked_by"]["ИТ-продукты"] == 1

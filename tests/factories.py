@@ -59,3 +59,28 @@ def catalog_row(
         contacts,
         comment,
     ]
+
+
+def make_xls(rows: list[list[Any]], headers: list[str] | None = None) -> bytes:
+    """Build an in-memory legacy .xls so the xlrd branch of the parser is covered.
+
+    `xlwt` is a test-only dependency: the application reads .xls, never writes it.
+    """
+    import datetime as dt
+
+    import xlwt
+
+    book = xlwt.Workbook(encoding="utf-8")
+    sheet = book.add_sheet("Каталог")
+    date_style = xlwt.easyxf(num_format_str="DD.MM.YYYY")
+    for column, title in enumerate(headers or CATALOG_HEADERS):
+        sheet.write(0, column, title)
+    for row_index, row in enumerate(rows, start=1):
+        for column, value in enumerate(row):
+            if isinstance(value, dt.date):
+                sheet.write(row_index, column, value, date_style)
+            else:
+                sheet.write(row_index, column, value)
+    buffer = io.BytesIO()
+    book.save(buffer)
+    return buffer.getvalue()

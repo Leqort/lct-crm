@@ -23,7 +23,6 @@ class TargetField:
     title: str  # human-readable label for the mapping UI
     aliases: tuple[str, ...] = field(default=())
     required: bool = False
-    multi_value: bool = False  # cell may hold several values split by ; or ,
 
 
 # --- Field catalogues per import target -----------------------------------
@@ -84,7 +83,6 @@ INTERACTION_FIELDS: tuple[TargetField, ...] = (
         path="university_contacts.full_name",
         title="Ответственные от ВУЗа",
         aliases=("Ответственные от ВУЗа", "Ответственный от ВУЗа", "Контакты вуза"),
-        multi_value=True,
     ),
     TargetField(
         path="interactions.comment",
@@ -124,7 +122,6 @@ IT_PRODUCT_FIELDS: tuple[TargetField, ...] = (
         path="it_directions.name",
         title="ИТ-направление",
         aliases=("ИТ-направление", "Направление"),
-        multi_value=True,
     ),
     TargetField(
         path="it_products.description", title="Описание", aliases=("Описание", "Комментарий")
@@ -167,13 +164,6 @@ _SUGGEST_THRESHOLD = 75
 
 def fields_for(target: ImportTarget) -> tuple[TargetField, ...]:
     return FIELDS_BY_TARGET[target]
-
-
-def field_by_path(target: ImportTarget, path: str) -> TargetField | None:
-    for item in fields_for(target):
-        if item.path == path:
-            return item
-    return None
 
 
 def suggest_mapping(headers: list[str], target: ImportTarget) -> list[dict[str, object]]:

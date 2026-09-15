@@ -1,0 +1,59 @@
+{
+  "realm": "crm",
+  "enabled": true,
+  "sslRequired": "none",
+  "registrationAllowed": false,
+  "roles": {
+    "realm": [
+      { "name": "admin", "description": "Полный доступ, мягкое удаление, журнал аудита" },
+      { "name": "manager", "description": "Видит и меняет всё, кроме удаления" },
+      { "name": "user", "description": "Видит только закреплённые за собой вузы" }
+    ]
+  },
+  "clients": [
+    {
+      "clientId": "crm-api",
+      "name": "CRM API (Swagger)",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": true,
+      "serviceAccountsEnabled": false,
+      "redirectUris": ["http://localhost:8000/docs*", "http://localhost:8000/*"],
+      "webOrigins": ["http://localhost:8000"]
+    }
+  ],
+  "users": [
+    {
+      "username": "kc-admin",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "Тестовый",
+      "lastName": "Админ",
+      "email": "kc-admin@crm.local",
+      "credentials": [{ "type": "password", "value": "admin123", "temporary": false }],
+      "realmRoles": ["admin"]
+    },
+    {
+      "username": "kc-manager",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "Тестовый",
+      "lastName": "Менеджер",
+      "email": "kc-manager@crm.local",
+      "credentials": [{ "type": "password", "value": "manager123", "temporary": false }],
+      "realmRoles": ["manager"]
+    },
+    {
+      "username": "kc-user",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "Тестовый",
+      "lastName": "Пользователь",
+      "email": "kc-user@crm.local",
+      "credentials": [{ "type": "password", "value": "user123", "temporary": false }],
+      "realmRoles": ["user"]
+    }
+  ]
+}

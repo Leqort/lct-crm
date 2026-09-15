@@ -35,14 +35,6 @@ class ImportRowRepository(BaseRepository[ImportRow]):
     sortable_fields: ClassVar[tuple[str, ...]] = ("row_number",)
     default_order: ClassVar[tuple[str, ...]] = ("row_number",)
 
-    async def delete_for_job(self, job_id: uuid.UUID) -> None:
-        """Re-validating a job replaces its previous rows outright.
-
-        `import_rows` is scratch space for the preview, not business data, so a
-        hard delete here does not violate the soft-delete policy.
-        """
-        await self.session.execute(sa.delete(ImportRow).where(ImportRow.job_id == job_id))
-
     async def list_for_job(
         self,
         job_id: uuid.UUID,

@@ -2,12 +2,9 @@
 
 from __future__ import annotations
 
-import uuid
-from typing import Annotated, Any
+from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
-
-from app.core.config import settings
 
 
 class ORMModel(BaseModel):
@@ -40,19 +37,3 @@ class ErrorResponse(BaseModel):
     """Single error contract for the whole API (SPEC §10)."""
 
     error: ErrorBody
-
-
-PageNumber = Annotated[int, Field(ge=1, description="Номер страницы, начиная с 1")]
-PageSize = Annotated[
-    int,
-    Field(ge=1, le=settings.page_size_max, description="Размер страницы, максимум 200"),
-]
-
-
-class AuditStamp(ORMModel):
-    """Bookkeeping columns every domain object exposes."""
-
-    created_at: Any
-    updated_at: Any
-    created_by: uuid.UUID | None = None
-    updated_by: uuid.UUID | None = None
