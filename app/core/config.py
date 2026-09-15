@@ -12,7 +12,9 @@ from typing import Literal
 from pydantic import computed_field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-Environment = Literal["local", "dev", "staging", "production"]
+# `test` is used by the test-server compose configuration.  Keep it distinct
+# from local development while preserving the production-only auth safeguard.
+Environment = Literal["local", "dev", "test", "staging", "production"]
 AuthMode = Literal["dev", "keycloak"]
 
 
