@@ -20,6 +20,43 @@ cp .env.example .env
 docker compose up --build
 ```
 
+### CI/CD: тестовый сервер
+
+При push в `main` GitHub Actions выполняет `ruff`, `mypy` и `pytest`, собирает
+образ на GitHub-hosted runner и публикует его в GitHub Container Registry
+(GHCR). После этого по SSH на тестовом сервере выполняются `docker compose
+pull` и перезапуск контейнеров. Dockerfile на сервере не используется и сборка
+там не выполняется.
+
+Файл [docker-compose.deploy.yml](docker-compose.deploy.yml) предназначен для
+этого деплоя. На сервере один раз нужно установить Docker Compose v2, создать
+каталог `/opt/lct-crm`, скопировать в него `.env.server.example` как `.env`,
+заполнить секреты и выдать пользователю права на Docker:
+
+```bash
+sudo mkdir -p /opt/lct-crm
+sudo chown -R DEPLOY_USER:DEPLOY_USER /opt/lct-crm
+sudo usermod -aG docker DEPLOY_USER
+```
+
+В настройках репозитория GitHub создайте Environment `test` и добавьте secrets:
+
+| Secret | Значение |
+| --- | --- |
+| `DEPLOY_HOST` | IP или DNS сервера |
+| `DEPLOY_PORT` | SSH-порт, например `22` |
+| `DEPLOY_USER` | SSH-пользователь |
+| `DEPLOY_SSH_KEY` | приватный SSH-ключ пользователя |
+| `DEPLOY_PATH` | путь приложения, например `/opt/lct-crm` |
+| `DEPLOY_REGISTRY_USERNAME` | GitHub username владельца токена |
+| `DEPLOY_REGISTRY_TOKEN` | GitHub PAT с правом `read:packages` |
+| `DEPLOY_KNOWN_HOSTS` | вывод `ssh-keyscan -p PORT HOST` (рекомендуется) |
+
+`DEPLOY_KNOWN_HOSTS` можно временно не задавать: workflow получит ключ через
+`ssh-keyscan`, но для постоянного использования лучше сохранить проверенный
+host key. Для доступа к приватному GHCR-пакету на сервере нужен PAT с
+`read:packages`; токен не записывается в репозиторий.
+
 Поднимается PostgreSQL 16 и приложение. Миграции применяются автоматически в
 entrypoint-скрипте контейнера, демо-данные засеваются при `SEED_ON_START=true`.
 
