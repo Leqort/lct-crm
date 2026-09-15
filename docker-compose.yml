@@ -61,9 +61,13 @@ services:
       SEED_ON_START: ${SEED_ON_START:-true}
       KEYCLOAK_ISSUER: ${KEYCLOAK_ISSUER:-}
       KEYCLOAK_AUDIENCE: ${KEYCLOAK_AUDIENCE:-}
-      # Inside the compose network the api container talks to Keycloak by
-      # its service name, not by the `localhost` hostname baked into `iss`.
-      KEYCLOAK_JWKS_URL: ${KEYCLOAK_JWKS_URL:-http://keycloak:8080/realms/crm/protocol/openid-connect/certs}
+      # Hardcoded, not read from .env: inside the compose network this
+      # container must reach Keycloak by its service name. `.env` typically
+      # holds the `localhost:8080` JWKS URL for the "run uvicorn on the host"
+      # workflow — substituting that in here would make this container try
+      # to dial itself and fail every token check with a connection error
+      # (same reasoning as hardcoding POSTGRES_HOST above).
+      KEYCLOAK_JWKS_URL: http://keycloak:8080/realms/crm/protocol/openid-connect/certs
     ports:
       - "${API_PORT:-8000}:8000"
     healthcheck:
