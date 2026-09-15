@@ -15,6 +15,7 @@ from app.repositories.interaction import InteractionRepository
 from app.repositories.university import UniversityRepository
 from app.schemas.interaction import InteractionCreate, InteractionUpdate
 from app.services.base import apply_patch, integrity_guard
+from app.services.route import RouteService
 from app.services.text import clean_text
 
 # Fields the importer is allowed to write on an interaction.
@@ -107,6 +108,9 @@ class InteractionService:
             ),
         ):
             await self.session.flush()
+            # A new card joins the default workflow straight away, so it is
+            # never stranded outside the process. No-op until one is published.
+            await RouteService(self.session, self.scope).start_if_configured(interaction)
             await self.session.commit()
         # The response embeds university/direction/product/responsible, none of
         # which a just-inserted object has loaded.
@@ -180,6 +184,10 @@ class InteractionService:
                 it_product_id=it_product_id,
             )
             self.repo.add(interaction)
+            await self.session.flush()
+            # Imported cards enter the process on the same footing as ones
+            # created by hand.
+            await RouteService(self.session, self.scope).start_if_configured(interaction)
             created = True
 
         for field in IMPORTABLE_FIELDS:

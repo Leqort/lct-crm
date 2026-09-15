@@ -12,6 +12,7 @@ from app.models.base import DomainBase
 from app.models.product import ITDirection, ITProduct
 from app.models.university import University
 from app.models.user import User
+from app.models.workflow import WorkflowStage, WorkflowVersion
 
 # Sentinel used in the partial unique index below to make NULL direction/product
 # behave like a value: in PostgreSQL two NULLs are never "equal", so without it
@@ -46,17 +47,24 @@ class Interaction(DomainBase):
     transfer_status: Mapped[str | None] = mapped_column(sa.Text, default=None)
     comment: Mapped[str | None] = mapped_column(sa.Text, default=None)
 
-    # --- SPEC-02 placeholders ---------------------------------------------
-    # Deliberately plain UUID columns without a foreign key: the workflow tables
-    # do not exist yet. SPEC-02 adds the FKs in its own migration. No logic in
-    # this spec may depend on them.
-    workflow_version_id: Mapped[uuid.UUID | None] = mapped_column(default=None)
-    current_stage_id: Mapped[uuid.UUID | None] = mapped_column(default=None)
+    # --- Workflow (SPEC-02) -----------------------------------------------
+    # The version the card started on, not the workflow: publishing a new
+    # version must not reroute work already in flight (A6). Both stay nullable —
+    # a card can exist before any workflow is configured, and the import creates
+    # exactly such cards.
+    workflow_version_id: Mapped[uuid.UUID | None] = mapped_column(
+        sa.ForeignKey("workflow_versions.id", ondelete="RESTRICT"), default=None
+    )
+    current_stage_id: Mapped[uuid.UUID | None] = mapped_column(
+        sa.ForeignKey("workflow_stages.id", ondelete="RESTRICT"), default=None
+    )
 
     university: Mapped[University] = relationship(lazy="selectin")
     it_direction: Mapped[ITDirection | None] = relationship(lazy="selectin")
     it_product: Mapped[ITProduct | None] = relationship(lazy="selectin")
     responsible_user: Mapped[User | None] = relationship(lazy="selectin")
+    current_stage: Mapped[WorkflowStage | None] = relationship(lazy="selectin")
+    workflow_version: Mapped[WorkflowVersion | None] = relationship(lazy="selectin")
 
     __table_args__ = (
         sa.CheckConstraint(
@@ -80,4 +88,7 @@ class Interaction(DomainBase):
         sa.Index("ix_interactions_it_direction_id", "it_direction_id"),
         sa.Index("ix_interactions_it_product_id", "it_product_id"),
         sa.Index("ix_interactions_license_signed_at", "license_signed_at"),
+        # Workflow filtering: "все карточки, стоящие на этапе X" (FR-01).
+        sa.Index("ix_interactions_current_stage_id", "current_stage_id"),
+        sa.Index("ix_interactions_workflow_version_id", "workflow_version_id"),
     )

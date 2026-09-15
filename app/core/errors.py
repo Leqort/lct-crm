@@ -17,6 +17,13 @@ class ErrorCode(StrEnum):
     IMPORT_FILE_TOO_LARGE = "IMPORT_FILE_TOO_LARGE"
     IMPORT_MAPPING_INCOMPLETE = "IMPORT_MAPPING_INCOMPLETE"
     IMPORT_JOB_WRONG_STATE = "IMPORT_JOB_WRONG_STATE"
+    # Added by SPEC-02: the frontend needs to tell "you cannot move there" apart
+    # from "the payload is malformed", and both would otherwise be
+    # VALIDATION_ERROR.
+    WORKFLOW_INVALID_TRANSITION = "WORKFLOW_INVALID_TRANSITION"
+    WORKFLOW_VERSION_LOCKED = "WORKFLOW_VERSION_LOCKED"
+    ATTACHMENT_INVALID_FORMAT = "ATTACHMENT_INVALID_FORMAT"
+    ATTACHMENT_TOO_LARGE = "ATTACHMENT_TOO_LARGE"
     INTERNAL_ERROR = "INTERNAL_ERROR"
 
 
@@ -88,6 +95,32 @@ class ImportJobWrongStateError(AppError):
     code = ErrorCode.IMPORT_JOB_WRONG_STATE
     http_status = 409
     message = "Операция недопустима в текущем состоянии задачи импорта"
+
+
+class WorkflowInvalidTransitionError(AppError):
+    code = ErrorCode.WORKFLOW_INVALID_TRANSITION
+    http_status = 422
+    message = "Такой переход по этапам не разрешён"
+
+
+class WorkflowVersionLockedError(AppError):
+    """Structural edits are only legal while a version is a draft (SPEC-02 A6)."""
+
+    code = ErrorCode.WORKFLOW_VERSION_LOCKED
+    http_status = 409
+    message = "Версия workflow опубликована: структуру можно менять только в черновике"
+
+
+class AttachmentInvalidFormatError(AppError):
+    code = ErrorCode.ATTACHMENT_INVALID_FORMAT
+    http_status = 422
+    message = "Формат файла не поддерживается"
+
+
+class AttachmentTooLargeError(AppError):
+    code = ErrorCode.ATTACHMENT_TOO_LARGE
+    http_status = 413
+    message = "Размер файла превышает допустимый предел"
 
 
 class InternalError(AppError):

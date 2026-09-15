@@ -14,6 +14,14 @@ from app.repositories.university import (
     UniversityRepository,
 )
 from app.repositories.user import UserRepository
+from app.repositories.workflow import (
+    InteractionStageHistoryRepository,
+    WorkflowAttachmentRepository,
+    WorkflowRepository,
+    WorkflowStageRepository,
+    WorkflowTransitionRepository,
+    WorkflowVersionRepository,
+)
 
 __all__ = [
     "BaseRepository",
@@ -23,10 +31,16 @@ __all__ = [
     "ImportMappingPresetRepository",
     "ImportRowRepository",
     "InteractionRepository",
+    "InteractionStageHistoryRepository",
     "UniversityAssignmentRepository",
     "UniversityContactRepository",
     "UniversityRepository",
     "UserRepository",
     "VendorRepository",
+    "WorkflowAttachmentRepository",
+    "WorkflowRepository",
+    "WorkflowStageRepository",
+    "WorkflowTransitionRepository",
+    "WorkflowVersionRepository",
     "visible_university_ids",
 ]

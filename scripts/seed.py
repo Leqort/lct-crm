@@ -28,6 +28,7 @@ from app.services.catalogs import (
 )
 from app.services.interactions import InteractionService
 from app.services.users import UserService
+from app.services.workflow_presets import ensure_base_workflow
 
 logger = logging.getLogger("seed")
 
@@ -108,6 +109,11 @@ async def seed() -> None:
         ctx = AuditContext(actor_id=admin.id, actor_name=admin.full_name)
 
         with audit_context(ctx):
+            # The 14-step base process must exist before any card is created:
+            # new interactions join it automatically (SPEC-02 A2).
+            workflow = await ensure_base_workflow(session, scope)
+            logger.info("base workflow ready: %s", workflow.name)
+
             directions = ITDirectionService(session, scope)
             direction_by_name = {}
             for name, description in DEMO_DIRECTIONS:

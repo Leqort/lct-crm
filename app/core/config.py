@@ -54,6 +54,11 @@ class Settings(BaseSettings):
     # match for a slightly different spelling coming from Excel.
     import_fuzzy_threshold: int = 88
 
+    # --- Attachments -------------------------------------------------------
+    # Stage attachments (FR-04). Stored in the database, so the cap also bounds
+    # how large a single row can get.
+    attachment_max_file_size: int = 25 * 1024 * 1024  # 25 MiB
+
     # --- Pagination --------------------------------------------------------
     page_size_default: int = 50
     page_size_max: int = 200
