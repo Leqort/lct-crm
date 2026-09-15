@@ -61,6 +61,62 @@ curl -H "X-Debug-User: seed-manager" http://localhost:8000/api/v1/universities
 curl -H "X-Debug-User: seed-user"    http://localhost:8000/api/v1/universities  # уже меньше
 ```
 
+### Keycloak (AUTH_MODE=keycloak)
+
+Локальный Keycloak поднимается вместе с остальным стеком:
+
+```bash
+docker compose up -d keycloak
+```
+
+При старте автоматически импортируется realm `crm` (`docker/keycloak/realm-export.json`):
+публичный клиент `crm-api` (direct access grants включены — можно получать
+токен паролем, без confidential-секрета) и три тестовых пользователя:
+
+| Логин | Пароль | Роль |
+|---|---|---|
+| `kc-admin` | `admin123` | `admin` |
+| `kc-manager` | `manager123` | `manager` |
+| `kc-user` | `user123` | `user` |
+
+Роль назначается прямо на пользователя как realm-роль и попадает в claim
+`realm_access.roles` — именно оттуда её читает `_role_from_claims`. Локальная
+запись в `users` создаётся/обновляется на лету при первом валидном запросе
+(`_sync_user_projection`) — заранее заводить пользователя вручную не нужно.
+
+Приложение запускайте с:
+
+```bash
+AUTH_MODE=keycloak uvicorn app.main:app --reload
+```
+
+`.env.example` уже содержит `KEYCLOAK_ISSUER` и `KEYCLOAK_JWKS_URL`, указывающие
+на `http://localhost:8080/realms/crm` — это подходит, когда приложение
+запущено на хосте (не в контейнере `api`), как в разделе «Локально» выше. Если
+вместо этого используете контейнер `api` из docker-compose, он резолвит
+Keycloak по имени сервиса (`http://keycloak:8080/...`) — переопределять
+руками не нужно, это уже в `docker-compose.yml`. `KC_HOSTNAME=localhost`
+у сервиса `keycloak` держит `iss`-claim токена одинаковым независимо от того,
+с какого хоста Keycloak вызвали — иначе токен, выпущенный через
+`localhost:8080`, не прошёл бы проверку `issuer` у сервиса, ходящего за JWKS
+через `keycloak:8080`.
+
+**Через curl** (быстро получить токен и проверить руками):
+
+```bash
+TOKEN=$(curl -s -X POST http://localhost:8080/realms/crm/protocol/openid-connect/token \
+  -d grant_type=password -d client_id=crm-api \
+  -d username=kc-manager -d password=manager123 \
+  | python3 -c "import sys,json;print(json.load(sys.stdin)['access_token'])")
+
+curl -H "Authorization: Bearer $TOKEN" http://localhost:8000/api/v1/universities
+```
+
+**Через Swagger** (<http://localhost:8000/docs>): при `AUTH_MODE=keycloak`
+кнопка «Authorize» показывает форму OAuth2 password flow с полями
+username/password (client_id уже подставлен) — Swagger сам получает токен у
+Keycloak и подставляет его во все запросы. Никакого curl и ручной вставки JWT.
+
 ---
 
 ## Разработка
