@@ -1,0 +1,49 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: crm-postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-crm}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-crm}
+      POSTGRES_DB: ${POSTGRES_DB:-crm}
+      # Collation matters for ORDER BY on Cyrillic names.
+      LANG: ru_RU.utf8
+    ports:
+      - "${POSTGRES_EXPOSED_PORT:-5432}:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-crm} -d ${POSTGRES_DB:-crm}"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  api:
+    build: .
+    container_name: crm-api
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      ENV: ${ENV:-local}
+      AUTH_MODE: ${AUTH_MODE:-dev}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      POSTGRES_HOST: db
+      POSTGRES_PORT: 5432
+      POSTGRES_USER: ${POSTGRES_USER:-crm}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-crm}
+      POSTGRES_DB: ${POSTGRES_DB:-crm}
+      SEED_ON_START: ${SEED_ON_START:-true}
+      KEYCLOAK_ISSUER: ${KEYCLOAK_ISSUER:-}
+      KEYCLOAK_AUDIENCE: ${KEYCLOAK_AUDIENCE:-}
+      KEYCLOAK_JWKS_URL: ${KEYCLOAK_JWKS_URL:-}
+    ports:
+      - "${API_PORT:-8000}:8000"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8000/health || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  postgres-data:
