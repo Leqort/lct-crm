@@ -16,6 +16,8 @@ from __future__ import annotations
 import datetime as dt
 import logging
 import uuid
+from dataclasses import dataclass
+from dataclasses import field as dataclass_field
 from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -46,6 +48,8 @@ from app.models.enums import (
     ImportTarget,
 )
 from app.models.import_job import ImportJob, ImportMappingPreset, ImportRow
+from app.models.university import University
+from app.models.user import User
 from app.repositories.import_job import (
     ImportJobRepository,
     ImportMappingPresetRepository,
@@ -60,10 +64,21 @@ from app.services.catalogs import (
     VendorService,
 )
 from app.services.interactions import InteractionService
-from app.services.text import clean_text, normalize_name, split_multi_value
+from app.services.text import clean_text, normalize_name, normalize_person_name, split_multi_value
 from app.services.users import UserService
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass
+class _ValidationCache:
+    """Database lookups shared only by one dry-run validation."""
+
+    universities: dict[str, University | None] = dataclass_field(default_factory=dict)
+    university_suggestions: dict[str, tuple[University, float] | None] = dataclass_field(
+        default_factory=dict
+    )
+    managers: dict[str, User | None] = dataclass_field(default_factory=dict)
 
 
 def _empty_stats() -> dict[str, int]:
@@ -219,10 +234,12 @@ class ImportService:
         stats = _empty_stats()
         stats["total"] = len(all_rows)
 
-        # First pass: parse and resolve every row independently.
+        # First pass: parse and resolve every row. Repeated values in one file
+        # share lookup results, avoiding N+1 queries on large dry-runs.
+        cache = _ValidationCache()
         seen_keys: dict[str, int] = {}
         for row in all_rows:
-            parsed, messages = await self._validate_row(job.target, row, mapping)
+            parsed, messages = await self._validate_row(job.target, row, mapping, cache)
             row.parsed_data = parsed
             row.status = self._status_from(messages)
             row.messages = [m.to_dict() for m in messages]
@@ -290,7 +307,11 @@ class ImportService:
         return None
 
     async def _validate_row(
-        self, target: ImportTarget, row: ImportRow, mapping: dict[str, str]
+        self,
+        target: ImportTarget,
+        row: ImportRow,
+        mapping: dict[str, str],
+        cache: _ValidationCache,
     ) -> tuple[dict[str, Any], list[RowMessage]]:
         handlers = {
             ImportTarget.INTERACTIONS: self._validate_interaction_row,
@@ -298,10 +319,10 @@ class ImportService:
             ImportTarget.IT_PRODUCTS: self._validate_product_row,
             ImportTarget.CONTACTS: self._validate_contact_row,
         }
-        return await handlers[target](row, mapping)
+        return await handlers[target](row, mapping, cache)
 
     async def _resolve_university(
-        self, name: Any, messages: list[RowMessage]
+        self, name: Any, messages: list[RowMessage], cache: _ValidationCache
     ) -> tuple[str | None, uuid.UUID | None]:
         """Match a university name, suggesting near-misses without merging."""
         cleaned = clean_text(name)
@@ -310,16 +331,23 @@ class ImportService:
             return None, None
 
         normalized = normalize_name(cleaned)
-        existing = await self.universities.repo.find_by_normalized_name(normalized)
+        if normalized not in cache.universities:
+            cache.universities[normalized] = await self.universities.repo.find_by_normalized_name(
+                normalized
+            )
+        existing = cache.universities[normalized]
         if existing is not None:
             return cleaned, existing.id
 
         # No exact match: offer the closest existing name but never merge
         # automatically (SPEC §6 step 3).
         threshold = settings.import_fuzzy_threshold / 100.0
-        similar = await self.universities.suggest_similar(cleaned, limit=1)
-        if similar and similar[0][1] >= threshold:
-            candidate, score = similar[0]
+        if normalized not in cache.university_suggestions:
+            similar = await self.universities.suggest_similar(cleaned, limit=1)
+            cache.university_suggestions[normalized] = similar[0] if similar else None
+        suggestion = cache.university_suggestions[normalized]
+        if suggestion is not None and suggestion[1] >= threshold:
+            candidate, score = suggestion
             messages.append(
                 warning(
                     f"Вуз «{cleaned}» не найден, но похож на «{candidate.name}» "
@@ -334,13 +362,13 @@ class ImportService:
         return cleaned, None
 
     async def _validate_interaction_row(
-        self, row: ImportRow, mapping: dict[str, str]
+        self, row: ImportRow, mapping: dict[str, str], cache: _ValidationCache
     ) -> tuple[dict[str, Any], list[RowMessage]]:
         messages: list[RowMessage] = []
         parsed: dict[str, Any] = {}
 
         university_name, university_id = await self._resolve_university(
-            self._cell(row, mapping, "universities.name"), messages
+            self._cell(row, mapping, "universities.name"), messages, cache
         )
         parsed["university_name"] = university_name
         parsed["university_id"] = str(university_id) if university_id else None
@@ -402,7 +430,12 @@ class ImportService:
         parsed["responsible_name"] = manager_raw
         parsed["responsible_user_id"] = None
         if manager_raw:
-            user = await self.users.match_by_full_name(manager_raw)
+            normalized_manager = normalize_person_name(manager_raw)
+            if normalized_manager not in cache.managers:
+                cache.managers[normalized_manager] = await self.users.match_by_full_name(
+                    manager_raw
+                )
+            user = cache.managers[normalized_manager]
             if user is None:
                 messages.append(
                     warning(
@@ -476,13 +509,13 @@ class ImportService:
         )
 
     async def _validate_university_row(
-        self, row: ImportRow, mapping: dict[str, str]
+        self, row: ImportRow, mapping: dict[str, str], cache: _ValidationCache
     ) -> tuple[dict[str, Any], list[RowMessage]]:
         messages: list[RowMessage] = []
         parsed: dict[str, Any] = {}
 
         name, university_id = await self._resolve_university(
-            self._cell(row, mapping, "universities.name"), messages
+            self._cell(row, mapping, "universities.name"), messages, cache
         )
         parsed["university_name"] = name
         parsed["existing_entity_id"] = str(university_id) if university_id else None
@@ -502,7 +535,7 @@ class ImportService:
         return parsed, messages
 
     async def _validate_product_row(
-        self, row: ImportRow, mapping: dict[str, str]
+        self, row: ImportRow, mapping: dict[str, str], _cache: _ValidationCache
     ) -> tuple[dict[str, Any], list[RowMessage]]:
         messages: list[RowMessage] = []
         parsed: dict[str, Any] = {}
@@ -551,13 +584,13 @@ class ImportService:
         return parsed, messages
 
     async def _validate_contact_row(
-        self, row: ImportRow, mapping: dict[str, str]
+        self, row: ImportRow, mapping: dict[str, str], cache: _ValidationCache
     ) -> tuple[dict[str, Any], list[RowMessage]]:
         messages: list[RowMessage] = []
         parsed: dict[str, Any] = {}
 
         university_name, university_id = await self._resolve_university(
-            self._cell(row, mapping, "universities.name"), messages
+            self._cell(row, mapping, "universities.name"), messages, cache
         )
         parsed["university_name"] = university_name
         parsed["university_id"] = str(university_id) if university_id else None

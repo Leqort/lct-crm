@@ -10,13 +10,15 @@ import sqlalchemy as sa
 from app.core.access import AccessScope
 from app.core.errors import ImportJobWrongStateError, InternalError
 from app.imports.importer import ImportService
-from app.models.enums import AuditAction, ImportJobStatus, ImportRowStatus, ImportTarget
+from app.models.enums import AuditAction, ImportJobStatus, ImportRowStatus, ImportTarget, UserRole
 from app.models.interaction import Interaction
 from app.models.university import University
 from app.schemas.university import UniversityCreate
+from app.schemas.user import UserCreate
 from app.services.audit import search_audit_log
 from app.services.catalogs import UniversityService
 from app.services.interactions import InteractionService
+from app.services.users import UserService
 from tests.factories import catalog_row, make_xlsx
 
 
@@ -92,6 +94,49 @@ async def test_repeated_import_creates_no_duplicates(session):
     )
     assert created["duplicate_of"] is not None
     assert created["warnings"]
+
+
+async def test_dry_run_caches_repeated_university_and_manager_lookups(session, monkeypatch):
+    university = await UniversityService(session, AccessScope.system()).create(
+        UniversityCreate(name="MGTU")
+    )
+    manager = await UserService(session, AccessScope.system()).create(
+        UserCreate(
+            keycloak_id="kam-cache",
+            full_name="Ivanov Ivan Ivanovich",
+            role=UserRole.USER,
+        )
+    )
+    content = make_xlsx([catalog_row(university.name, manager=manager.full_name) for _ in range(3)])
+    service = ImportService(session, AccessScope.system())
+    created = await service.create_job(
+        filename="repeated.xlsx", content=content, target=ImportTarget.INTERACTIONS
+    )
+
+    university_calls = 0
+    manager_calls = 0
+    original_university_lookup = service.universities.repo.find_by_normalized_name
+    original_manager_lookup = service.users.match_by_full_name
+
+    async def count_university_lookup(normalized: str):
+        nonlocal university_calls
+        university_calls += 1
+        return await original_university_lookup(normalized)
+
+    async def count_manager_lookup(full_name: str):
+        nonlocal manager_calls
+        manager_calls += 1
+        return await original_manager_lookup(full_name)
+
+    monkeypatch.setattr(
+        service.universities.repo, "find_by_normalized_name", count_university_lookup
+    )
+    monkeypatch.setattr(service.users, "match_by_full_name", count_manager_lookup)
+
+    await service.validate(created["job"].id)
+
+    assert university_calls == 1
+    assert manager_calls == 1
 
 
 async def test_empty_cell_does_not_erase_stored_value(session):
