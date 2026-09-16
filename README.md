@@ -39,9 +39,9 @@ sudo usermod -aG docker DEPLOY_USER
 ```
 
 Деплой также поднимает Caddy как reverse proxy. Caddy автоматически получает и
-обновляет сертификаты Let's Encrypt для `DOMAIN` (API) и `KEYCLOAK_DOMAIN`
-(Keycloak), а данные ACME сохраняются в Docker volumes. Перед первым деплоем
-создайте DNS-записи обоих доменов на IP сервера и откройте входящие TCP-порты
+обновляет сертификаты Let's Encrypt для `DOMAIN` (API), `KEYCLOAK_DOMAIN`
+(Keycloak) и `GRAFANA_DOMAIN` (Grafana), а данные ACME сохраняются в Docker volumes. Перед первым деплоем
+создайте DNS-записи всех трёх доменов на IP сервера и откройте входящие TCP-порты
 `80` и `443` (UDP `443` — опционально для HTTP/3). Заполните эти переменные в
 `.env`; `KEYCLOAK_ISSUER` должен использовать HTTPS-адрес Keycloak.
 
@@ -69,6 +69,20 @@ entrypoint-скрипте контейнера, демо-данные засев
 * Swagger UI — <http://localhost:8000/docs>
 * ReDoc — <http://localhost:8000/redoc>
 * Health-check — <http://localhost:8000/health>
+* Prometheus — <http://localhost:9090>
+* Grafana — <http://localhost:3000> (учётные данные из `GRAFANA_ADMIN_USER` и `GRAFANA_ADMIN_PASSWORD`)
+
+### Мониторинг
+
+Команда `docker compose up` запускает Prometheus и Grafana. Prometheus каждые 15 секунд
+собирает `/metrics` API; Grafana автоматически получает datasource и дашборд **CRM API Overview**.
+Дашборд показывает доступность API, RPS, долю ошибок 5xx, p95 задержки и число запросов в работе.
+В метрики не попадают персональные данные: только HTTP-метод, шаблон маршрута и статус ответа.
+
+В production-стеке Grafana доступна через `GRAFANA_DOMAIN`, а Prometheus не публикуется
+наружу. До деплоя задайте сложный `GRAFANA_ADMIN_PASSWORD` в `.env`.
+Локально оба интерфейса по умолчанию привязаны к `127.0.0.1`; изменить адрес можно
+переменной `MONITORING_BIND_ADDRESS`.
 
 ### Локально (без Docker)
 
