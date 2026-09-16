@@ -9,6 +9,7 @@ from app.api.v1 import (
     catalogs,
     imports,
     interactions,
+    reports,
     route,
     universities,
     users,
@@ -23,6 +24,7 @@ api_router.include_router(catalogs.vendors_router)
 api_router.include_router(catalogs.directions_router)
 api_router.include_router(catalogs.products_router)
 api_router.include_router(interactions.router)
+api_router.include_router(reports.router)
 api_router.include_router(route.router)
 api_router.include_router(route.attachments_router)
 api_router.include_router(workflows.router)

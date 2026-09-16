@@ -104,6 +104,30 @@ async def test_filters_narrow_the_list(session, scope):
     assert all_rows == 2
 
 
+async def test_period_filter_includes_overlapping_license(session, scope):
+    universities = UniversityService(session, scope)
+    first = await universities.create(UniversityCreate(name="Первый вуз"))
+    second = await universities.create(UniversityCreate(name="Второй вуз"))
+    service = InteractionService(session, scope)
+    await service.create(
+        InteractionCreate(
+            university_id=first.id,
+            license_signed_at=dt.date(2025, 1, 1),
+            license_expires_at=dt.date(2027, 1, 1),
+        )
+    )
+    await service.create(
+        InteractionCreate(
+            university_id=second.id,
+            license_signed_at=dt.date(2023, 1, 1),
+            license_expires_at=dt.date(2024, 1, 1),
+        )
+    )
+
+    _, total = await service.list(period_from=dt.date(2026, 1, 1), period_to=dt.date(2026, 12, 31))
+    assert total == 1
+
+
 async def test_soft_deleted_interaction_disappears(session, scope):
     university = await UniversityService(session, scope).create(UniversityCreate(name="МГТУ"))
     service = InteractionService(session, scope)

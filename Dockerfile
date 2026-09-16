@@ -11,7 +11,7 @@ WORKDIR /app
 # Build tooling is needed for asyncpg wheels on some platforms; it is removed
 # again in the same layer so it never reaches the final image size.
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends build-essential curl \
+    && apt-get install -y --no-install-recommends build-essential curl fonts-dejavu-core \
     && rm -rf /var/lib/apt/lists/*
 
 COPY pyproject.toml README.md ./

@@ -263,6 +263,7 @@ async def download_attachment(
 @attachments_router.delete(
     "/{attachment_id}",
     status_code=status.HTTP_204_NO_CONTENT,
+    response_model=None,
     summary="Удалить вложение (мягкое удаление)",
     description=(
         "Только для роли `admin`. Метаданные помечаются удалёнными, содержимое остаётся "

@@ -122,6 +122,7 @@ async def update_university(
 @router.delete(
     "/{university_id}",
     status_code=status.HTTP_204_NO_CONTENT,
+    response_model=None,
     summary="Удалить вуз (мягкое удаление)",
     description=(
         "Только для роли `admin`. Запись не удаляется физически: проставляется "
@@ -312,6 +313,7 @@ async def update_contact(
 @contacts_router.delete(
     "/{contact_id}",
     status_code=status.HTTP_204_NO_CONTENT,
+    response_model=None,
     summary="Удалить контактное лицо (мягкое удаление)",
     description="Только для роли `admin`.",
     responses=CATALOG_ERRORS,
