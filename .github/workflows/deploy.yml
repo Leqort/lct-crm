@@ -223,6 +223,24 @@ jobs:
             exit 1
           fi
 
+          # Monitoring services are not dependencies of the API. Start them
+          # explicitly before Caddy so its reverse proxy can resolve grafana
+          # through Docker DNS as soon as the public endpoint is available.
+          if ! docker compose -f docker-compose.deploy.yml up -d --no-build prometheus grafana; then
+            echo "monitoring startup failed; recent container logs follow"
+            docker compose -f docker-compose.deploy.yml logs --tail=100 prometheus grafana || true
+            exit 1
+          fi
+
+          sleep 2
+          for container in crm-prometheus crm-grafana; do
+            if [ "$(docker inspect --format '{{.State.Running}}' "$container" 2>/dev/null || true)" != "true" ]; then
+              echo "$container stopped after startup; recent container logs follow"
+              docker compose -f docker-compose.deploy.yml logs --tail=100 prometheus grafana || true
+              exit 1
+            fi
+          done
+
           # Caddy expands DOMAIN, KEYCLOAK_DOMAIN and GRAFANA_DOMAIN only when
           # it starts. Recreate it to pick up the current values and Caddyfile;
           # otherwise a container created before a new domain was added may
