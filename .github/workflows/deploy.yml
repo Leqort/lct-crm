@@ -186,7 +186,19 @@ jobs:
           cd "$deploy_path"
           export IMAGE_NAME="$image_name" IMAGE_TAG="$image_tag"
           docker compose -f docker-compose.deploy.yml pull api
-          if ! docker compose -f docker-compose.deploy.yml up -d --no-build --remove-orphans; then
+
+          # Caddy owns the public HTTP(S) ports.  Keep its container alive during
+          # routine API releases: recreating it races with the host port bindings
+          # and unnecessarily interrupts TLS traffic.  --no-recreate still starts
+          # it for an initial deployment.
+          if ! docker compose -f docker-compose.deploy.yml up -d --no-build --no-recreate db keycloak caddy; then
+            echo "compose startup failed; recent container logs follow"
+            docker compose -f docker-compose.deploy.yml ps || true
+            docker compose -f docker-compose.deploy.yml logs --tail=100 db keycloak api caddy || true
+            exit 1
+          fi
+
+          if ! docker compose -f docker-compose.deploy.yml up -d --no-build --no-deps api; then
             echo "compose startup failed; recent container logs follow"
             docker compose -f docker-compose.deploy.yml ps || true
             docker compose -f docker-compose.deploy.yml logs --tail=100 db keycloak api caddy || true
