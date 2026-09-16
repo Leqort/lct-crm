@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import time
 import uuid
 from collections.abc import AsyncIterator, Awaitable, Callable, Sequence
 from contextlib import asynccontextmanager
@@ -12,7 +13,9 @@ from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.openapi.utils import get_openapi
 from fastapi.responses import JSONResponse
+from prometheus_client import CONTENT_TYPE_LATEST, Counter, Gauge, Histogram, generate_latest
 from starlette.exceptions import HTTPException as StarletteHTTPException
+from starlette.responses import Response
 
 from app.api.v1.router import api_router
 from app.core.audit import AuditContext, audit_context
@@ -22,6 +25,22 @@ from app.core.errors import AppError, ErrorCode, error_payload
 from app.core.logging import configure_logging
 
 logger = logging.getLogger(__name__)
+
+HTTP_REQUESTS_TOTAL = Counter(
+    "crm_http_requests_total",
+    "Total number of HTTP requests handled by the CRM API.",
+    ("method", "path", "status_code"),
+)
+HTTP_REQUEST_DURATION_SECONDS = Histogram(
+    "crm_http_request_duration_seconds",
+    "Time spent handling CRM API HTTP requests.",
+    ("method", "path"),
+)
+HTTP_REQUESTS_IN_PROGRESS = Gauge(
+    "crm_http_requests_in_progress",
+    "Number of HTTP requests currently being handled by the CRM API.",
+    ("method",),
+)
 
 DESCRIPTION = """
 CRM ИТ Школы Ростелекома — ядро данных (SPEC-01).
@@ -115,6 +134,14 @@ async def request_context_middleware(
     The actor is filled in later by `get_current_user`; everything else (who
     called from where, under which request id) is known right now.
     """
+    path = request.url.path
+    # Do not instrument the scrape endpoint itself: otherwise every scrape
+    # would affect the request metrics it is trying to collect.
+    instrument_request = path != "/metrics"
+    started_at = time.perf_counter()
+    if instrument_request:
+        HTTP_REQUESTS_IN_PROGRESS.labels(request.method).inc()
+
     header_id = request.headers.get("X-Request-ID")
     try:
         request_id = uuid.UUID(header_id) if header_id else uuid.uuid4()
@@ -127,9 +154,28 @@ async def request_context_middleware(
         request_id=request_id,
     )
     request.state.request_id = request_id
-    with audit_context(ctx):
-        response = await call_next(request)
+    try:
+        with audit_context(ctx):
+            response = await call_next(request)
+    except Exception:
+        if instrument_request:
+            HTTP_REQUESTS_TOTAL.labels(request.method, "unmatched", "500").inc()
+            HTTP_REQUEST_DURATION_SECONDS.labels(request.method, "unmatched").observe(
+                time.perf_counter() - started_at
+            )
+        raise
+    finally:
+        if instrument_request:
+            HTTP_REQUESTS_IN_PROGRESS.labels(request.method).dec()
+
     response.headers["X-Request-ID"] = str(request_id)
+    if instrument_request:
+        route = request.scope.get("route")
+        route_path = getattr(route, "path", "unmatched")
+        HTTP_REQUESTS_TOTAL.labels(request.method, route_path, str(response.status_code)).inc()
+        HTTP_REQUEST_DURATION_SECONDS.labels(request.method, route_path).observe(
+            time.perf_counter() - started_at
+        )
     return response
 
 
@@ -213,6 +259,12 @@ def _safe_errors(errors: Sequence[Any]) -> list[dict[str, Any]]:
 )
 async def health() -> dict[str, str]:
     return {"status": "ok", "env": settings.env}
+
+
+@app.get("/metrics", include_in_schema=False)
+async def metrics() -> Response:
+    """Expose Prometheus metrics for the internal monitoring service."""
+    return Response(content=generate_latest(), media_type=CONTENT_TYPE_LATEST)
 
 
 app.include_router(api_router, prefix=settings.api_prefix)

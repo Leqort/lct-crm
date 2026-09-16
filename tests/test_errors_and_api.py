@@ -95,6 +95,15 @@ async def test_health_endpoint(client):
     assert response.json()["status"] == "ok"
 
 
+async def test_metrics_endpoint_exposes_prometheus_metrics(client):
+    await client.get("/health")
+    response = await client.get("/metrics")
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/plain")
+    assert "crm_http_requests_total" in response.text
+    assert 'path="/health"' in response.text
+
+
 async def test_openapi_documents_every_endpoint(client):
     schema = (await client.get("/openapi.json")).json()
     operations = [
