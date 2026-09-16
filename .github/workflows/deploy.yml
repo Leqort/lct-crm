@@ -187,11 +187,11 @@ jobs:
           export IMAGE_NAME="$image_name" IMAGE_TAG="$image_tag"
           docker compose -f docker-compose.deploy.yml pull api
 
-          # Caddy owns the public HTTP(S) ports.  Keep its container alive during
-          # routine API releases: recreating it races with the host port bindings
-          # and unnecessarily interrupts TLS traffic.  --no-recreate still starts
-          # it for an initial deployment.
-          if ! docker compose -f docker-compose.deploy.yml up -d --no-build --no-recreate db keycloak caddy; then
+          # Do not recreate stateful services during an API release. Caddy is
+          # handled below: its configuration and domain variables can change
+          # between releases, and --no-recreate would leave it with stale (or
+          # missing) environment variables.
+          if ! docker compose -f docker-compose.deploy.yml up -d --no-build --no-recreate db keycloak; then
             echo "compose startup failed; recent container logs follow"
             docker compose -f docker-compose.deploy.yml ps || true
             docker compose -f docker-compose.deploy.yml logs --tail=100 db keycloak api caddy || true
@@ -209,8 +209,7 @@ jobs:
             health="$(docker inspect --format '{{.State.Health.Status}}' crm-api 2>/dev/null || true)"
             if [ "$health" = "healthy" ]; then
               echo "api is healthy"
-              docker compose -f docker-compose.deploy.yml ps
-              exit 0
+              break
             fi
             if [ "$health" = "unhealthy" ]; then
               docker compose -f docker-compose.deploy.yml logs --tail=100 api
@@ -219,6 +218,27 @@ jobs:
             sleep 2
           done
 
-          docker compose -f docker-compose.deploy.yml logs --tail=100 api
-          exit 1
+          if [ "$health" != "healthy" ]; then
+            docker compose -f docker-compose.deploy.yml logs --tail=100 api
+            exit 1
+          fi
+
+          # Caddy expands DOMAIN, KEYCLOAK_DOMAIN and GRAFANA_DOMAIN only when
+          # it starts. Recreate it to pick up the current values and Caddyfile;
+          # otherwise a container created before a new domain was added may
+          # expand a site label to an empty string and reject the Caddyfile.
+          if ! docker compose -f docker-compose.deploy.yml up -d --no-build --no-deps --force-recreate caddy; then
+            echo "caddy startup failed; recent container logs follow"
+            docker compose -f docker-compose.deploy.yml logs --tail=100 caddy || true
+            exit 1
+          fi
+
+          sleep 2
+          if [ "$(docker inspect --format '{{.State.Running}}' crm-caddy 2>/dev/null || true)" != "true" ]; then
+            echo "caddy stopped after startup; recent container logs follow"
+            docker compose -f docker-compose.deploy.yml logs --tail=100 caddy || true
+            exit 1
+          fi
+
+          docker compose -f docker-compose.deploy.yml ps
           REMOTE
