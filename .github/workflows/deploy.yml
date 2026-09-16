@@ -227,8 +227,19 @@ jobs:
           # it starts. Recreate it to pick up the current values and Caddyfile;
           # otherwise a container created before a new domain was added may
           # expand a site label to an empty string and reject the Caddyfile.
+          #
+          # This deployment owns ports 80 and 443 through the caddy service.
+          # A legacy host-level Caddy service uses the same ports and prevents
+          # Docker from starting crm-caddy, so stop and disable it when present.
+          if command -v systemctl >/dev/null 2>&1 && systemctl is-active --quiet caddy; then
+            echo "stopping legacy host caddy service so crm-caddy can bind ports 80 and 443"
+            systemctl disable --now caddy
+          fi
+
           if ! docker compose -f docker-compose.deploy.yml up -d --no-build --no-deps --force-recreate caddy; then
             echo "caddy startup failed; recent container logs follow"
+            echo "processes publishing port 80:"
+            docker ps --filter publish=80 --format 'table {{.Names}}\t{{.Ports}}' || true
             docker compose -f docker-compose.deploy.yml logs --tail=100 caddy || true
             exit 1
           fi
