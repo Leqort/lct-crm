@@ -1,7 +1,7 @@
 {
   "openapi": "3.1.0",
   "info": {
-    "title": "CRM ИТ Школы",
+    "title": "CRM IT School",
     "description": "\nCRM ИТ Школы Ростелекома — ядро данных (SPEC-01).\n\n**Что здесь есть:** справочники (вузы, вендоры, ИТ-направления, ИТ-продукты,\nконтакты вузов), карточки взаимодействий, двухфазный импорт каталогов из Excel\nи журнал аудита.\n\n**Чего здесь нет:** workflow-движок и переходы по этапам (SPEC-02), отчёты\n(SPEC-03), интеграции с LMS и сайтом (SPEC-04). Модель данных под них\nподготовлена.\n\n### Авторизация\n* `AUTH_MODE=dev` — заголовок `X-Debug-User` с UUID, `keycloak_id` или email\n  существующего сотрудника. Запрещён при `ENV=production`.\n* `AUTH_MODE=keycloak` — `Authorization: Bearer <JWT>`, проверка подписи по JWKS.\n\n### Роли\n* `user` — видит только закреплённые за собой вузы и связанные с ними данные;\n* `manager` — видит всё, может создавать и изменять;\n* `admin` — плюс мягкое удаление и доступ к журналу аудита.\n\n### Формат ошибок\nЛюбая ошибка возвращается в едином виде:\n\n```json\n{\"error\": {\"code\": \"NOT_FOUND\", \"message\": \"Объект не найден\",\n           \"details\": {}, \"request_id\": \"0d2f...\"}}\n```\n",
     "version": "0.1.0"
   },
@@ -2577,6 +2577,44 @@
             "description": "Фильтр по ответственному менеджеру"
           },
           {
+            "name": "period_from",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Начало периода действия лицензии",
+              "title": "Period From"
+            },
+            "description": "Начало периода действия лицензии"
+          },
+          {
+            "name": "period_to",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Конец периода действия лицензии",
+              "title": "Period To"
+            },
+            "description": "Конец периода действия лицензии"
+          },
+          {
             "name": "search",
             "in": "query",
             "required": false,
@@ -2965,6 +3003,76 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/reports/export": {
+      "post": {
+        "tags": [
+          "Reports and statistics"
+        ],
+        "summary": "Export interactions report",
+        "description": "Generates an interactions report in XLS, XLSX, PDF, or JSON format.",
+        "operationId": "export_report_api_v1_reports_export_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReportRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/reports/statistics": {
+      "post": {
+        "tags": [
+          "Reports and statistics"
+        ],
+        "summary": "Export interaction statistics chart",
+        "description": "Builds a grouped interaction statistics chart in PNG or PDF format.",
+        "operationId": "export_statistics_api_v1_reports_statistics_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StatisticsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
             }
@@ -6711,7 +6819,7 @@
         "properties": {
           "file": {
             "type": "string",
-            "contentMediaType": "application/octet-stream",
+            "format": "binary",
             "title": "File",
             "description": "Файл одного из десяти допустимых форматов"
           },
@@ -6738,7 +6846,7 @@
         "properties": {
           "file": {
             "type": "string",
-            "contentMediaType": "application/octet-stream",
+            "format": "binary",
             "title": "File",
             "description": "Файл каталога .xlsx или .xls"
           },
@@ -6753,6 +6861,14 @@
           "file"
         ],
         "title": "Body_upload_import_api_v1_imports_post"
+      },
+      "ChartFormat": {
+        "type": "string",
+        "enum": [
+          "png",
+          "pdf"
+        ],
+        "title": "ChartFormat"
       },
       "ContactCreate": {
         "properties": {
@@ -8855,6 +8971,120 @@
         "type": "object",
         "title": "ProductUpdate"
       },
+      "ReportColumn": {
+        "type": "string",
+        "enum": [
+          "university",
+          "it_direction",
+          "it_product",
+          "workflow_stage",
+          "responsible"
+        ],
+        "title": "ReportColumn"
+      },
+      "ReportFormat": {
+        "type": "string",
+        "enum": [
+          "xls",
+          "xlsx",
+          "pdf",
+          "json"
+        ],
+        "title": "ReportFormat"
+      },
+      "ReportRequest": {
+        "properties": {
+          "university_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "University Id"
+          },
+          "it_direction_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "It Direction Id"
+          },
+          "it_product_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "It Product Id"
+          },
+          "responsible_user_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Responsible User Id"
+          },
+          "period_from": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Period From"
+          },
+          "period_to": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Period To"
+          },
+          "columns": {
+            "items": {
+              "$ref": "#/components/schemas/ReportColumn"
+            },
+            "type": "array",
+            "minItems": 1,
+            "title": "Columns"
+          },
+          "format": {
+            "$ref": "#/components/schemas/ReportFormat"
+          }
+        },
+        "type": "object",
+        "required": [
+          "columns",
+          "format"
+        ],
+        "title": "ReportRequest"
+      },
       "RouteStartRequest": {
         "properties": {
           "workflow_id": {
@@ -9306,6 +9536,94 @@
         "type": "object",
         "title": "StageStructureUpdate",
         "description": "Structural edits — только в черновике."
+      },
+      "StatisticsRequest": {
+        "properties": {
+          "university_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "University Id"
+          },
+          "it_direction_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "It Direction Id"
+          },
+          "it_product_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "It Product Id"
+          },
+          "responsible_user_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Responsible User Id"
+          },
+          "period_from": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Period From"
+          },
+          "period_to": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Period To"
+          },
+          "group_by": {
+            "$ref": "#/components/schemas/ReportColumn",
+            "default": "workflow_stage"
+          },
+          "format": {
+            "$ref": "#/components/schemas/ChartFormat"
+          }
+        },
+        "type": "object",
+        "required": [
+          "format"
+        ],
+        "title": "StatisticsRequest"
       },
       "TransitionCreate": {
         "properties": {
@@ -9868,13 +10186,6 @@
           "type": {
             "type": "string",
             "title": "Error Type"
-          },
-          "input": {
-            "title": "Input"
-          },
-          "ctx": {
-            "type": "object",
-            "title": "Context"
           }
         },
         "type": "object",
@@ -10225,14 +10536,11 @@
       }
     },
     "securitySchemes": {
-      "KeycloakOAuth2": {
-        "type": "oauth2",
-        "flows": {
-          "password": {
-            "tokenUrl": "http://localhost:8080/realms/crm/protocol/openid-connect/token",
-            "scopes": {}
-          }
-        }
+      "DebugUser": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-Debug-User",
+        "description": "UUID, keycloak_id или email существующего сотрудника"
       }
     }
   },
@@ -10296,7 +10604,7 @@
   ],
   "security": [
     {
-      "KeycloakOAuth2": []
+      "DebugUser": []
     }
   ]
 }

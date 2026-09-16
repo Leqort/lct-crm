@@ -15,6 +15,7 @@ from app.repositories.interaction import InteractionRepository
 from app.repositories.university import UniversityRepository
 from app.schemas.interaction import InteractionCreate, InteractionUpdate
 from app.services.base import apply_patch, integrity_guard
+from app.services.reporting import period_conditions
 from app.services.route import RouteService
 from app.services.text import clean_text
 
@@ -63,6 +64,8 @@ class InteractionService:
         it_direction_id: uuid.UUID | None = None,
         it_product_id: uuid.UUID | None = None,
         responsible_user_id: uuid.UUID | None = None,
+        period_from: dt.date | None = None,
+        period_to: dt.date | None = None,
         page: int = 1,
         size: int = 50,
         search: str | None = None,
@@ -77,6 +80,7 @@ class InteractionService:
             filters.append(Interaction.it_product_id == it_product_id)
         if responsible_user_id is not None:
             filters.append(Interaction.responsible_user_id == responsible_user_id)
+        filters.extend(period_conditions(period_from, period_to))
         return await self.repo.list(
             page=page, size=size, search=search, sort=sort, extra_filters=filters
         )

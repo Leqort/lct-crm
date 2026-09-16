@@ -108,6 +108,7 @@ async def update_vendor(
 @vendors_router.delete(
     "/{vendor_id}",
     status_code=status.HTTP_204_NO_CONTENT,
+    response_model=None,
     summary="Удалить вендора (мягкое удаление)",
     description="Только для роли `admin`.",
     responses=CATALOG_ERRORS,
@@ -198,6 +199,7 @@ async def update_direction(
 @directions_router.delete(
     "/{direction_id}",
     status_code=status.HTTP_204_NO_CONTENT,
+    response_model=None,
     summary="Удалить ИТ-направление (мягкое удаление)",
     description="Только для роли `admin`.",
     responses=CATALOG_ERRORS,
@@ -292,6 +294,7 @@ async def update_product(
 @products_router.delete(
     "/{product_id}",
     status_code=status.HTTP_204_NO_CONTENT,
+    response_model=None,
     summary="Удалить ИТ-продукт (мягкое удаление)",
     description="Только для роли `admin`.",
     responses=CATALOG_ERRORS,

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import datetime as dt
 import uuid
 
 from fastapi import APIRouter, Depends, Query, status
@@ -45,6 +46,10 @@ async def list_interactions(
     responsible_user_id: uuid.UUID | None = Query(
         default=None, description="Фильтр по ответственному менеджеру"
     ),
+    period_from: dt.date | None = Query(
+        default=None, description="Начало периода действия лицензии"
+    ),
+    period_to: dt.date | None = Query(default=None, description="Конец периода действия лицензии"),
     search: SearchQuery = None,
     sort: SortQuery = None,
 ) -> Page[InteractionRead]:
@@ -53,6 +58,8 @@ async def list_interactions(
         it_direction_id=it_direction_id,
         it_product_id=it_product_id,
         responsible_user_id=responsible_user_id,
+        period_from=period_from,
+        period_to=period_to,
         page=page.page,
         size=page.size,
         search=search,
@@ -125,6 +132,7 @@ async def update_interaction(
 @router.delete(
     "/{interaction_id}",
     status_code=status.HTTP_204_NO_CONTENT,
+    response_model=None,
     summary="Удалить взаимодействие (мягкое удаление)",
     description="Только для роли `admin`. Запись остаётся в БД с проставленным `deleted_at`.",
     responses=CATALOG_ERRORS,

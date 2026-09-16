@@ -138,6 +138,7 @@ async def update_workflow(
 @router.delete(
     "/{workflow_id}",
     status_code=status.HTTP_204_NO_CONTENT,
+    response_model=None,
     summary="Удалить workflow (мягкое удаление)",
     description=(
         "Только для роли `admin`. Запрещено, пока по опубликованной версии идут карточки: "
@@ -366,6 +367,7 @@ async def update_stage_structure(
 @stages_router.delete(
     "/{stage_id}",
     status_code=status.HTTP_204_NO_CONTENT,
+    response_model=None,
     summary="Удалить этап",
     description=(
         "Только в черновике и только если на этапе не стоит ни одной карточки. "
@@ -432,6 +434,7 @@ async def create_transition(
 @transitions_router.delete(
     "/{transition_id}",
     status_code=status.HTTP_204_NO_CONTENT,
+    response_model=None,
     summary="Удалить переход",
     description="Только в черновике версии.",
     responses=STRUCTURE_ERRORS,
