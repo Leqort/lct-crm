@@ -24,7 +24,12 @@ _REPORT_MEDIA_TYPES = {
 }
 
 
-@router.post("/export", summary="Export interactions report", response_class=Response)
+@router.post(
+    "/export",
+    summary="Export interactions report",
+    description="Generates an interactions report in XLS, XLSX, PDF, or JSON format.",
+    response_class=Response,
+)
 async def export_report(data: ReportRequest, session: SessionDep, scope: ScopeDep) -> Response:
     rows = await ReportingService(session, scope).rows(data, data.columns)
     # Office/PDF rendering is CPU-bound. It runs outside the event loop so
@@ -45,7 +50,12 @@ async def export_report(data: ReportRequest, session: SessionDep, scope: ScopeDe
     )
 
 
-@router.post("/statistics", summary="Export interaction statistics chart", response_class=Response)
+@router.post(
+    "/statistics",
+    summary="Export interaction statistics chart",
+    description="Builds a grouped interaction statistics chart in PNG or PDF format.",
+    response_class=Response,
+)
 async def export_statistics(
     data: StatisticsRequest, session: SessionDep, scope: ScopeDep
 ) -> Response:

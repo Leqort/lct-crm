@@ -3016,6 +3016,7 @@
           "Reports and statistics"
         ],
         "summary": "Export interactions report",
+        "description": "Generates an interactions report in XLS, XLSX, PDF, or JSON format.",
         "operationId": "export_report_api_v1_reports_export_post",
         "requestBody": {
           "content": {
@@ -3050,6 +3051,7 @@
           "Reports and statistics"
         ],
         "summary": "Export interaction statistics chart",
+        "description": "Builds a grouped interaction statistics chart in PNG or PDF format.",
         "operationId": "export_statistics_api_v1_reports_statistics_post",
         "requestBody": {
           "content": {
